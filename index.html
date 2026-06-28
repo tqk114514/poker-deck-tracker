@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>牌盒 · 54 张扑克牌盘点</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <span class="eyebrow">Card Inventory · 牌盒盘点</span>
+        <h1>五十四<span class="accent">牌</span>册</h1>
+        <span class="subtitle">勾选你手中持有的牌，缺失一目了然。</span>
+      </div>
+      <div class="stats">
+        <div class="stat held">
+          <div class="label">已持有</div>
+          <div class="value"><span id="heldCount">0</span><span class="of">/54</span></div>
+        </div>
+        <div class="stat missing">
+          <div class="label">缺失</div>
+          <div class="value" id="missingCount">54</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn" id="btnSelectAll">全选</button>
+      <button class="btn" id="btnSelectNone">全不选</button>
+      <button class="btn danger" id="btnReset">重置</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+      <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <!-- Tag filters -->
+    <div class="tags" id="tags">
+      <div class="tag-group">
+        <span class="tags-label">状态</span>
+        <button class="tag active" data-type="status" data-filter="all">全部 <span class="count">(54)</span></button>
+        <button class="tag" data-type="status" data-filter="held">已摸到 <span class="count" id="heldTagCount">(0)</span></button>
+        <button class="tag" data-type="status" data-filter="missing">未摸到 <span class="count" id="missingTagCount">(54)</span></button>
+      </div>
+      <span class="tag-divider"></span>
+      <div class="tag-group">
+        <span class="tags-label">花色</span>
+        <button class="tag active" data-type="suit" data-filter="all">全部</button>
+        <button class="tag" data-type="suit" data-filter="spades"><span class="sym black">♠</span>黑桃 <span class="count">(13)</span></button>
+        <button class="tag" data-type="suit" data-filter="hearts"><span class="sym red">♥</span>红心 <span class="count">(13)</span></button>
+        <button class="tag" data-type="suit" data-filter="diamonds"><span class="sym red">♦</span>方块 <span class="count">(13)</span></button>
+        <button class="tag" data-type="suit" data-filter="clubs"><span class="sym black">♣</span>梅花 <span class="count">(13)</span></button>
+        <button class="tag" data-type="suit" data-filter="joker"><span class="sym gold">★</span>王牌 <span class="count">(2)</span></button>
+      </div>
+    </div>
+
+    <!-- Card box -->
+    <div class="box-section">
+      <div class="cardbox" id="cardbox" role="checkbox" aria-checked="false" tabindex="0" title="点击切换牌盒是否已摸到">
+        <div class="face lid"></div>
+        <div class="stack">
+          <div class="layer"></div>
+          <div class="layer"></div>
+          <div class="layer"></div>
+        </div>
+        <div class="face body">
+          <div class="box-title">Deck Box</div>
+          <div class="box-count"><span id="boxCount">0</span><span class="of"> / 54</span></div>
+          <div class="box-sub" id="boxStateLabel">牌盒未摸到</div>
+        </div>
+        <div class="box-checkmark"></div>
+      </div>
+    </div>
+
+    <!-- Card grid -->
+    <main class="grid" id="grid"></main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>数据存储于浏览器本地<span class="dot"></span>localStorage</span>
+      <span id="lastSaved">尚未保存</span>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="script.js"></script>
+</body>
+</html>
