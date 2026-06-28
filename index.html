@@ -5,10 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>牌盒 · 54 张扑克牌盘点</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<style>
+  #page-loader{position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;pointer-events:none;background:transparent;transition:opacity .4s ease}
+  #page-loader .bar{height:100%;width:0;background:linear-gradient(90deg,#8a7440,#d4af37,#e8d9a8);box-shadow:0 0 8px rgba(212,175,55,.6);transition:width .4s cubic-bezier(.22,1,.36,1)}
+  #page-loader.done{opacity:0}
+</style>
+<script>
+(function(){
+  var l=document.createElement('div');
+  l.id='page-loader';
+  l.innerHTML='<div class="bar"></div>';
+  document.documentElement.appendChild(l);
+  var total=5,done=0,fin=false;
+  var b=l.querySelector('.bar');
+  function tick(){
+    done++;
+    b.style.width=Math.min(100,done/total*100)+'%';
+    if(done>=total&&!fin){
+      fin=true;
+      setTimeout(function(){
+        l.classList.add('done');
+        setTimeout(function(){if(l.parentNode)l.remove();},500);
+      },250);
+    }
+  }
+  window.__loaderTick=tick;
+  window.__onFontsCssLoaded=function(){
+    tick();
+    if(document.fonts&&document.fonts.load){
+      Promise.all([
+        document.fonts.load('700 16px "Cinzel"'),
+        document.fonts.load('400 16px "Outfit"'),
+        document.fonts.load('italic 500 16px "Cormorant Garamond"')
+      ]).then(function(){tick();},function(){tick();});
+    }else{
+      tick();
+    }
+  };
+  setTimeout(function(){while(done<total)tick();},8000);
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css" />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet" onload="__onFontsCssLoaded()" />
+<link rel="stylesheet" href="style.css" onload="__loaderTick()" />
 </head>
 <body>
   <div class="app">
@@ -92,6 +132,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="script.js"></script>
+  <script src="script.js" onload="__loaderTick()"></script>
 </body>
 </html>

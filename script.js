@@ -282,3 +282,4 @@ function showToast(msg) {
 renderGrid();
 updateStats();
 updateBoxDom();
+if (window.__loaderTick) window.__loaderTick();
