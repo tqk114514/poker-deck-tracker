@@ -127,7 +127,7 @@
     color: var(--gold-bright);
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
   }
-  .stat.missing .value { color: var(--ivory-dim); }
+  .stat.missing .value { color: var(--ivory); }
   .stat .of {
     font-size: 13px;
     color: var(--gold-dim);
@@ -597,12 +597,12 @@
     transform: scale(1);
   }
   .card.unchecked {
-    filter: grayscale(0.85) brightness(0.55);
-    opacity: 0.6;
+    filter: grayscale(0.7) brightness(0.72);
+    opacity: 0.72;
   }
   .card.unchecked:hover {
-    filter: grayscale(0.4) brightness(0.8);
-    opacity: 0.85;
+    filter: grayscale(0.25) brightness(0.92);
+    opacity: 0.92;
   }
 
   .card.flash {
