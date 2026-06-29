@@ -116,6 +116,8 @@ function cardInner(card) {
 }
 
 function renderGrid() {
+  leavingSet.clear();
+  if (cleanTimer) { clearTimeout(cleanTimer); cleanTimer = null; }
   const filtered = DECK.filter(c => {
     if (suitFilter !== 'all' && c.suit !== suitFilter) return false;
     if (statusFilter === 'held' && !isChecked(c.id)) return false;
@@ -173,6 +175,75 @@ function updateCardDom(id) {
   el._flashTimer = setTimeout(() => el.classList.remove('flash'), 250);
 }
 
+function cardMatchesFilter(card) {
+  if (suitFilter !== 'all' && card.suit !== suitFilter) return false;
+  if (statusFilter === 'held' && !isChecked(card.id)) return false;
+  if (statusFilter === 'missing' && isChecked(card.id)) return false;
+  return true;
+}
+
+const leavingSet = new Set();
+let cleanTimer = null;
+
+function scheduleClean() {
+  if (cleanTimer) clearTimeout(cleanTimer);
+  cleanTimer = setTimeout(cleanLeaving, 340);
+}
+
+function cleanLeaving() {
+  cleanTimer = null;
+  if (leavingSet.size === 0) return;
+
+  const stable = grid.querySelectorAll(':scope > .card:not(.leaving)');
+
+  // First: 批量读（连续读只 reflow 一次）
+  const firstRects = new Array(stable.length);
+  for (let i = 0; i < stable.length; i++) {
+    firstRects[i] = stable[i].getBoundingClientRect();
+  }
+
+  // 移除 leaving 牌（写 DOM，布局失效）
+  leavingSet.forEach(el => el.remove());
+  leavingSet.clear();
+
+  // Last + 播放: Web Animations API 在合成线程运行，无需 inline 样式 / will-change / rAF
+  for (let i = 0; i < stable.length; i++) {
+    const c = stable[i];
+    const first = firstRects[i];
+    const last = c.getBoundingClientRect();
+    const dx = first.left - last.left;
+    const dy = first.top - last.top;
+    if (dx === 0 && dy === 0) continue;
+
+    c.animate(
+      [
+        { transform: `translate3d(${dx}px, ${dy}px, 0)` },
+        { transform: 'translate3d(0, 0, 0)' }
+      ],
+      {
+        duration: 350,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        fill: 'none'
+      }
+    );
+  }
+}
+
+function removeCardWithAnimation(id) {
+  const el = grid.querySelector(`.card[data-id="${id}"]`);
+  if (!el) return;
+
+  setTimeout(() => {
+    if (!grid.contains(el)) return;
+    const card = DECK.find(c => c.id === id);
+    if (card && cardMatchesFilter(card)) return;
+
+    el.classList.add('leaving');
+    leavingSet.add(el);
+    scheduleClean();
+  }, 500);
+}
+
 function updateStats() {
   let held = 0;
   DECK.forEach(c => { if (isChecked(c.id)) held++; });
@@ -196,10 +267,14 @@ function updateLastSaved() {
 
 // ====== Interaction ======
 function toggleCard(id) {
+  const card = DECK.find(c => c.id === id);
   setState(id, !isChecked(id));
   updateCardDom(id);
   updateStats();
   saveStates();
+  if (card && !cardMatchesFilter(card)) {
+    removeCardWithAnimation(id);
+  }
 }
 
 grid.addEventListener('click', (e) => {
