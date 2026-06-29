@@ -140,6 +140,7 @@ function renderGrid() {
       </div>
     `;
   }).join('');
+  calibrateGrid();
 }
 
 function updateBoxDom() {
@@ -182,6 +183,42 @@ function cardMatchesFilter(card) {
   return true;
 }
 
+// ====== Grid metrics (零 reflow 标定) ======
+// cols 用 offsetTop 数（不受 transform 影响）；cardW/cardH 用 grid 容器 rect 反推小数精确值
+let gridMetrics = null; // { cols, cardW, cardH, gap }
+
+function calibrateGrid() {
+  const cards = grid.children;
+  if (cards.length < 1) { gridMetrics = null; return; }
+  // cols：用 offsetTop 数第一行（不受 transform 影响）
+  const top0 = cards[0].offsetTop;
+  let cols = 1;
+  for (let i = 1; i < cards.length; i++) {
+    if (cards[i].offsetTop !== top0) break;
+    cols++;
+  }
+  let gap = 14;
+  try {
+    const cs = getComputedStyle(grid);
+    gap = parseFloat(cs.columnGap || cs.gap) || 14;
+  } catch (e) {}
+  // 用 grid 容器自身的 rect 反推精确列宽/行高（小数）。
+  // grid 无 transform，rect 不受子元素入场/leaving 动画影响。连续读只触发 1 次 reflow。
+  const gridRect = grid.getBoundingClientRect();
+  const cardW = (gridRect.width - gap * (cols - 1)) / cols;
+  const rows = Math.ceil(cards.length / cols);
+  const cardH = rows > 1
+    ? (gridRect.height - gap * (rows - 1)) / rows
+    : cardW * (3.5 / 2.5); // aspect-ratio 2.5/3.5 fallback（单行时无行间距可推）
+  gridMetrics = { cols, cardW, cardH, gap };
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(calibrateGrid, 150);
+});
+
 const leavingSet = new Set();
 let cleanTimer = null;
 
@@ -194,25 +231,53 @@ function cleanLeaving() {
   cleanTimer = null;
   if (leavingSet.size === 0) return;
 
-  const stable = grid.querySelectorAll(':scope > .card:not(.leaving)');
+  const m = gridMetrics;
+  const useArithmetic = !!m;
 
-  // First: 批量读（连续读只 reflow 一次）
-  const firstRects = new Array(stable.length);
-  for (let i = 0; i < stable.length; i++) {
-    firstRects[i] = stable[i].getBoundingClientRect();
+  // 一次遍历：建 oldIndexMap（旧索引 = 含 leaving 的 DOM 顺序）+ 收集稳定卡片
+  const oldIndexMap = new Map();
+  const stablePre = [];
+  const children = grid.children;
+  for (let i = 0; i < children.length; i++) {
+    const c = children[i];
+    oldIndexMap.set(c, i);
+    if (!c.classList.contains('leaving')) stablePre.push(c);
   }
 
-  // 移除 leaving 牌（写 DOM，布局失效）
+  // 仅 fallback 需要真实 First 位置；算术路径完全跳过 getBoundingClientRect
+  let firstRects = null;
+  if (!useArithmetic) {
+    firstRects = new Array(stablePre.length);
+    for (let i = 0; i < stablePre.length; i++) {
+      firstRects[i] = stablePre[i].getBoundingClientRect();
+    }
+  }
+
+  // 移除 leaving 牌。移除后 stablePre[i] 的新索引就是 i（相对顺序不变）
   leavingSet.forEach(el => el.remove());
   leavingSet.clear();
 
-  // Last + 播放: Web Animations API 在合成线程运行，无需 inline 样式 / will-change / rAF
-  for (let i = 0; i < stable.length; i++) {
-    const c = stable[i];
-    const first = firstRects[i];
-    const last = c.getBoundingClientRect();
-    const dx = first.left - last.left;
-    const dy = first.top - last.top;
+  const stepX = m ? m.cardW + m.gap : 0;
+  const stepY = m ? m.cardH + m.gap : 0;
+  const cols = m ? m.cols : 0;
+
+  for (let i = 0; i < stablePre.length; i++) {
+    const c = stablePre[i];
+    let dx, dy;
+
+    if (useArithmetic) {
+      // 纯算术：位移 = (旧列-新列)*stepX, (旧行-新行)*stepY
+      const oldIdx = oldIndexMap.get(c);
+      dx = ((oldIdx % cols) - (i % cols)) * stepX;
+      dy = (Math.floor(oldIdx / cols) - Math.floor(i / cols)) * stepY;
+    } else {
+      // fallback: 真实 First - Last
+      const first = firstRects[i];
+      const last = c.getBoundingClientRect();
+      dx = first.left - last.left;
+      dy = first.top - last.top;
+    }
+
     if (dx === 0 && dy === 0) continue;
 
     c.animate(
