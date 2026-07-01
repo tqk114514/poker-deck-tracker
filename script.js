@@ -115,31 +115,41 @@ function cardInner(card) {
   `;
 }
 
+// 元素缓存：54 张牌的 DOM 元素在 init 时一次性创建，renderGrid 只做移动+属性更新，跳过 HTML 解析
+const cardEls = new Map();
+function buildCardEls() {
+  DECK.forEach(card => {
+    const el = document.createElement('div');
+    el.className = `card ${card.color}`;
+    el.dataset.id = card.id;
+    el.setAttribute('role', 'checkbox');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-label', card.suit === 'joker'
+      ? (card.jokerType === 'big' ? '大王' : '小王')
+      : fullLabel(card));
+    el.innerHTML = cardInner(card);
+    cardEls.set(card.id, el);
+  });
+}
+
 function renderGrid() {
   leavingSet.clear();
   if (cleanTimer) { clearTimeout(cleanTimer); cleanTimer = null; }
-  const filtered = DECK.filter(c => {
-    if (suitFilter !== 'all' && c.suit !== suitFilter) return false;
-    if (statusFilter === 'held' && !isChecked(c.id)) return false;
-    if (statusFilter === 'missing' && isChecked(c.id)) return false;
-    return true;
-  });
-  grid.innerHTML = filtered.map((card, idx) => {
+  const frag = document.createDocumentFragment();
+  let idx = 0;
+  for (const card of DECK) {
+    if (suitFilter !== 'all' && card.suit !== suitFilter) continue;
+    if (statusFilter === 'held' && !isChecked(card.id)) continue;
+    if (statusFilter === 'missing' && isChecked(card.id)) continue;
+    const el = cardEls.get(card.id);
     const checked = isChecked(card.id);
-    const stateClass = checked ? 'checked' : 'unchecked';
-    const delay = (idx * 0.025).toFixed(3);
-    return `
-      <div class="card ${card.color} ${stateClass}"
-           data-id="${card.id}"
-           style="--deal-delay:${delay}s"
-           role="checkbox"
-           aria-checked="${checked}"
-           tabindex="0"
-           aria-label="${card.suit === 'joker' ? (card.jokerType === 'big' ? '大王' : '小王') : fullLabel(card)}">
-        ${cardInner(card)}
-      </div>
-    `;
-  }).join('');
+    el.className = `card ${card.color} ${checked ? 'checked' : 'unchecked'}`;
+    el.setAttribute('aria-checked', String(checked));
+    el.style.setProperty('--deal-delay', `${(idx * 0.025).toFixed(3)}s`);
+    frag.appendChild(el);
+    idx++;
+  }
+  grid.replaceChildren(frag);
   calibrateGrid();
 }
 
@@ -419,6 +429,7 @@ function showToast(msg) {
 }
 
 // ====== Init ======
+buildCardEls();
 renderGrid();
 updateStats();
 updateBoxDom();
