@@ -155,9 +155,17 @@ function renderGrid() {
     el.setAttribute('aria-checked', String(checked));
     el.style.setProperty('--deal-delay', `${(idx * 0.025).toFixed(3)}s`);
     el.style.display = '';
+    el.style.animation = 'none';
     idx++;
   }
+  // calibrateGrid 读取 offsetTop 触发 reflow，使 animation:none 生效
   calibrateGrid();
+  // 移除 inline animation 覆盖，CSS cardDeal 动画重新播放（含已可见的牌）
+  const children = grid.children;
+  for (let i = 0; i < children.length; i++) {
+    const el = children[i];
+    if (el.style.display !== 'none') el.style.animation = '';
+  }
 }
 
 function updateBoxDom() {
