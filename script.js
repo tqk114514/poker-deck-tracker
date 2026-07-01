@@ -115,9 +115,11 @@ function cardInner(card) {
   `;
 }
 
-// 元素缓存：54 张牌的 DOM 元素在 init 时一次性创建，renderGrid 只做移动+属性更新，跳过 HTML 解析
+// 元素缓存 + display:none：54 张牌的 DOM 元素在 init 时一次性创建并永久挂在 grid 上。
+// renderGrid 只切换 display + 更新属性，零 DOM 树操作（无 removeChild/appendChild/replaceChildren）。
 const cardEls = new Map();
 function buildCardEls() {
+  const frag = document.createDocumentFragment();
   DECK.forEach(card => {
     const el = document.createElement('div');
     el.className = `card ${card.color}`;
@@ -128,30 +130,33 @@ function buildCardEls() {
       ? (card.jokerType === 'big' ? '大王' : '小王')
       : fullLabel(card));
     el.innerHTML = cardInner(card);
+    el.style.display = 'none';
     cardEls.set(card.id, el);
+    frag.appendChild(el);
   });
+  grid.appendChild(frag);
 }
 
 function renderGrid() {
   leavingSet.clear();
   if (cleanTimer) { clearTimeout(cleanTimer); cleanTimer = null; }
-  // 先清空 grid（1 次批量操作断开所有元素），再更新属性（断开状态下无样式重算），最后一次性插入
-  grid.replaceChildren();
-  const frag = document.createDocumentFragment();
   let idx = 0;
   for (const card of DECK) {
-    if (suitFilter !== 'all' && card.suit !== suitFilter) continue;
-    if (statusFilter === 'held' && !isChecked(card.id)) continue;
-    if (statusFilter === 'missing' && isChecked(card.id)) continue;
     const el = cardEls.get(card.id);
+    el.classList.remove('leaving');
+    if (suitFilter !== 'all' && card.suit !== suitFilter ||
+        statusFilter === 'held' && !isChecked(card.id) ||
+        statusFilter === 'missing' && isChecked(card.id)) {
+      el.style.display = 'none';
+      continue;
+    }
     const checked = isChecked(card.id);
     el.className = `card ${card.color} ${checked ? 'checked' : 'unchecked'}`;
     el.setAttribute('aria-checked', String(checked));
     el.style.setProperty('--deal-delay', `${(idx * 0.025).toFixed(3)}s`);
-    frag.appendChild(el);
+    el.style.display = '';
     idx++;
   }
-  grid.appendChild(frag);
   calibrateGrid();
 }
 
@@ -175,8 +180,8 @@ function fullLabel(card) {
 }
 
 function updateCardDom(id) {
-  const el = grid.querySelector(`.card[data-id="${id}"]`);
-  if (!el) return;
+  const el = cardEls.get(id);
+  if (!el || el.style.display === 'none') return;
   const checked = isChecked(id);
   el.classList.toggle('checked', checked);
   el.classList.toggle('unchecked', !checked);
@@ -200,13 +205,20 @@ function cardMatchesFilter(card) {
 let gridMetrics = null; // { cols, cardW, cardH, gap }
 
 function calibrateGrid() {
-  const cards = grid.children;
-  if (cards.length < 1) { gridMetrics = null; return; }
-  // cols：用 offsetTop 数第一行（不受 transform 影响）
-  const top0 = cards[0].offsetTop;
+  // grid.children 含 display:none 元素（永久挂载），需过滤后取可见元素做标定
+  const children = grid.children;
+  let first = null;
+  for (let i = 0; i < children.length; i++) {
+    if (children[i].style.display !== 'none') { first = children[i]; break; }
+  }
+  if (!first) { gridMetrics = null; return; }
+  // cols：用 offsetTop 数第一行可见元素（不受 transform 影响）
+  const top0 = first.offsetTop;
   let cols = 1;
-  for (let i = 1; i < cards.length; i++) {
-    if (cards[i].offsetTop !== top0) break;
+  for (let i = 0; i < children.length; i++) {
+    const c = children[i];
+    if (c === first || c.style.display === 'none') continue;
+    if (c.offsetTop !== top0) break;
     cols++;
   }
   let gap = 14;
@@ -218,7 +230,12 @@ function calibrateGrid() {
   // grid 无 transform，rect 不受子元素入场/leaving 动画影响。连续读只触发 1 次 reflow。
   const gridRect = grid.getBoundingClientRect();
   const cardW = (gridRect.width - gap * (cols - 1)) / cols;
-  const rows = Math.ceil(cards.length / cols);
+  // 统计可见元素数（display:none 不参与布局）
+  let visibleCount = 0;
+  for (let i = 0; i < children.length; i++) {
+    if (children[i].style.display !== 'none') visibleCount++;
+  }
+  const rows = Math.ceil(visibleCount / cols);
   const cardH = rows > 1
     ? (gridRect.height - gap * (rows - 1)) / rows
     : cardW * (3.5 / 2.5); // aspect-ratio 2.5/3.5 fallback（单行时无行间距可推）
@@ -246,13 +263,16 @@ function cleanLeaving() {
   const m = gridMetrics;
   const useArithmetic = !!m;
 
-  // 一次遍历：建 oldIndexMap（旧索引 = 含 leaving 的 DOM 顺序）+ 收集稳定卡片
-  const oldIndexMap = new Map();
+  // 一次遍历：建 oldVisibleIndex（跳过 display:none）+ 收集稳定卡片
+  // 旧可见索引 = 隐藏 leaving 前的可见序列位置（用于 FLIP 算术位移计算）
+  const oldVisibleIndex = new Map();
   const stablePre = [];
   const children = grid.children;
+  let visIdx = 0;
   for (let i = 0; i < children.length; i++) {
     const c = children[i];
-    oldIndexMap.set(c, i);
+    if (c.style.display === 'none') continue;
+    oldVisibleIndex.set(c, visIdx++);
     if (!c.classList.contains('leaving')) stablePre.push(c);
   }
 
@@ -265,8 +285,11 @@ function cleanLeaving() {
     }
   }
 
-  // 移除 leaving 牌。移除后 stablePre[i] 的新索引就是 i（相对顺序不变）
-  leavingSet.forEach(el => el.remove());
+  // 隐藏 leaving 牌（不再 remove）。隐藏后 stablePre[i] 的新可见索引就是 i
+  leavingSet.forEach(el => {
+    el.style.display = 'none';
+    el.classList.remove('leaving');
+  });
   leavingSet.clear();
 
   const stepX = m ? m.cardW + m.gap : 0;
@@ -279,7 +302,7 @@ function cleanLeaving() {
 
     if (useArithmetic) {
       // 纯算术：位移 = (旧列-新列)*stepX, (旧行-新行)*stepY
-      const oldIdx = oldIndexMap.get(c);
+      const oldIdx = oldVisibleIndex.get(c);
       dx = ((oldIdx % cols) - (i % cols)) * stepX;
       dy = (Math.floor(oldIdx / cols) - Math.floor(i / cols)) * stepY;
     } else {
@@ -307,12 +330,12 @@ function cleanLeaving() {
 }
 
 function removeCardWithAnimation(id) {
-  const el = grid.querySelector(`.card[data-id="${id}"]`);
-  if (!el) return;
+  const el = cardEls.get(id);
+  if (!el || el.style.display === 'none') return;
 
   setTimeout(() => {
-    if (!grid.contains(el)) return;
-    const card = DECK.find(c => c.id === id);
+    if (el.style.display === 'none') return;
+    const card = deckById.get(id);
     if (card && cardMatchesFilter(card)) return;
 
     el.classList.add('leaving');
@@ -344,7 +367,7 @@ function updateLastSaved() {
 
 // ====== Interaction ======
 function toggleCard(id) {
-  const card = DECK.find(c => c.id === id);
+  const card = deckById.get(id);
   setState(id, !isChecked(id));
   updateCardDom(id);
   updateStats();

@@ -101,12 +101,19 @@
       const r = grid.getBoundingClientRect();
       void cs.columnGap; void r.width; void r.height;
     });
-    measure('offsetTop 数列数', () => {
+    measure('offsetTop 数列数 (跳过 display:none)', () => {
       const cs = grid.children;
-      const top0 = cs[0].offsetTop;
+      let first = null;
+      for (let i = 0; i < cs.length; i++) {
+        if (cs[i].style.display !== 'none') { first = cs[i]; break; }
+      }
+      if (!first) return;
+      const top0 = first.offsetTop;
       let cols = 1;
-      for (let i = 1; i < cs.length; i++) {
-        if (cs[i].offsetTop !== top0) break;
+      for (let i = 0; i < cs.length; i++) {
+        const c = cs[i];
+        if (c === first || c.style.display === 'none') continue;
+        if (c.offsetTop !== top0) break;
         cols++;
       }
       void cols;
@@ -120,7 +127,11 @@
     const stepX = m.cardW + m.gap;
     const stepY = m.cardH + m.gap;
     const cols = m.cols;
-    const n = grid.children.length;
+    // n = 可见元素数（display:none 元素不参与布局）
+    let n = 0;
+    for (let i = 0; i < grid.children.length; i++) {
+      if (grid.children[i].style.display !== 'none') n++;
+    }
 
     measure('单次取模+乘法 (1张)', () => {
       const dx = (5 % cols - 4 % cols) * stepX;
@@ -164,7 +175,7 @@
 
   // ====== 4. DOM ======
   function benchDOM() {
-    measure('renderGrid (元素缓存+replaceChildren)', renderGrid);
+    measure('renderGrid (display:none 切换)', renderGrid);
     measure('renderGrid + 强制布局', () => {
       renderGrid();
       void grid.offsetHeight;
@@ -173,9 +184,12 @@
     measure('grid.querySelectorAll(".card")', () => {
       grid.querySelectorAll('.card');
     });
-    measure('grid.children 遍历 + offsetTop', () => {
+    measure('grid.children 遍历 (跳过 none) + offsetTop', () => {
       const cs = grid.children;
-      for (let i = 0; i < cs.length; i++) void cs[i].offsetTop;
+      for (let i = 0; i < cs.length; i++) {
+        if (cs[i].style.display === 'none') continue;
+        void cs[i].offsetTop;
+      }
     });
     measure('deckById.get (Map 查找)', () => {
       deckById.get('S-A');
@@ -192,7 +206,11 @@
     const stepX = m.cardW + m.gap;
     const stepY = m.cardH + m.gap;
     const cols = m.cols;
-    const n = grid.children.length;
+    // n = 可见元素数（display:none 元素不参与 FLIP 布局）
+    let n = 0;
+    for (let i = 0; i < grid.children.length; i++) {
+      if (grid.children[i].style.display !== 'none') n++;
+    }
     const leavingIdx = Math.floor(n / 2);
 
     measure('cleanLeaving 算术 (移除1张, 全量)', () => {
@@ -222,7 +240,7 @@
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
 
-    const cards = Array.from(grid.children);
+    const cards = Array.from(grid.children).filter(c => c.style.display !== 'none');
     if (cards.length < 2) {
       console.warn('无足够卡片测试帧率');
       return;
