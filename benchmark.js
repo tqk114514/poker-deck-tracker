@@ -1,6 +1,6 @@
 'use strict';
 /**
- * PKP 性能测试工具 —— 被动加载，不主动引用。
+ * poker-deck-tracker 性能测试工具 —— 被动加载，不主动引用。
  *
  * 加载方式（控制台粘贴）：
  *   var s=document.createElement('script');s.src='benchmark.js';document.body.appendChild(s)
@@ -280,7 +280,7 @@
   function run() {
     results.length = 0;
     const snap = snapshot();
-    console.group('%c⚡ PKP Benchmark', 'color:#d4af37;font-weight:bold;font-size:14px');
+    console.group('%c⚡ poker-deck-tracker Benchmark', 'color:#d4af37;font-weight:bold;font-size:14px');
     console.time('同步测试总计');
     try {
       benchCalibrate();
@@ -300,7 +300,7 @@
   async function runAll() {
     results.length = 0;
     const snap = snapshot();
-    console.group('%c⚡ PKP Benchmark (Full)', 'color:#d4af37;font-weight:bold;font-size:14px');
+    console.group('%c⚡ poker-deck-tracker Benchmark (Full)', 'color:#d4af37;font-weight:bold;font-size:14px');
     console.time('全套总计');
     try {
       benchCalibrate();
@@ -321,7 +321,7 @@
   async function fps() {
     results.length = 0;
     const snap = snapshot();
-    console.group('%c⚡ PKP Benchmark (FPS)', 'color:#d4af37;font-weight:bold;font-size:14px');
+    console.group('%c⚡ poker-deck-tracker Benchmark (FPS)', 'color:#d4af37;font-weight:bold;font-size:14px');
     try {
       await benchAnimationFPS();
     } finally {
