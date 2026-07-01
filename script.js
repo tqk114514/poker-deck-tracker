@@ -135,6 +135,8 @@ function buildCardEls() {
 function renderGrid() {
   leavingSet.clear();
   if (cleanTimer) { clearTimeout(cleanTimer); cleanTimer = null; }
+  // 先清空 grid（1 次批量操作断开所有元素），再更新属性（断开状态下无样式重算），最后一次性插入
+  grid.replaceChildren();
   const frag = document.createDocumentFragment();
   let idx = 0;
   for (const card of DECK) {
@@ -149,7 +151,7 @@ function renderGrid() {
     frag.appendChild(el);
     idx++;
   }
-  grid.replaceChildren(frag);
+  grid.appendChild(frag);
   calibrateGrid();
 }
 

@@ -164,7 +164,7 @@
 
   // ====== 4. DOM ======
   function benchDOM() {
-    measure('renderGrid (innerHTML 赋值，无强制布局)', renderGrid);
+    measure('renderGrid (元素缓存+replaceChildren)', renderGrid);
     measure('renderGrid + 强制布局', () => {
       renderGrid();
       void grid.offsetHeight;
@@ -332,6 +332,7 @@
     console.timeEnd('同步测试总计');
     printTable();
     console.groupEnd();
+    console.log('%c✅ 同步测试完成', 'color:#4caf50;font-weight:bold');
     return results;
   }
 
@@ -353,6 +354,7 @@
     console.timeEnd('全套总计');
     printTable();
     console.groupEnd();
+    console.log('%c✅ 全套测试完成', 'color:#4caf50;font-weight:bold');
     return results;
   }
 
@@ -367,6 +369,7 @@
     }
     printTable();
     console.groupEnd();
+    console.log('%c✅ 帧率测试完成', 'color:#4caf50;font-weight:bold');
     return results;
   }
 
