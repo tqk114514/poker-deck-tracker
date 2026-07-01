@@ -18,6 +18,8 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* 移除移动端点击高亮效果 */
+  * { -webkit-tap-highlight-color: transparent; tap-highlight-color: transparent; }
 
   html, body { min-height: 100%; }
 
@@ -449,6 +451,7 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 14px;
+    transition: height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   }
   @media (max-width: 1023px) {
     .grid { grid-template-columns: repeat(4, 1fr); }

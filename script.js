@@ -118,6 +118,11 @@ function cardInner(card) {
 function renderGrid() {
   leavingSet.clear();
   if (cleanTimer) { clearTimeout(cleanTimer); cleanTimer = null; }
+  // 保存当前高度，用于平滑过渡动画
+  const prevHeight = grid.scrollHeight;
+  if (prevHeight > 0) {
+    grid.style.height = prevHeight + 'px';
+  }
   const filtered = DECK.filter(c => {
     if (suitFilter !== 'all' && c.suit !== suitFilter) return false;
     if (statusFilter === 'held' && !isChecked(c.id)) return false;
@@ -141,6 +146,17 @@ function renderGrid() {
     `;
   }).join('');
   calibrateGrid();
+  // 计算新高度并应用平滑过渡
+  requestAnimationFrame(() => {
+    const newHeight = grid.scrollHeight;
+    grid.style.transition = 'height 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
+    grid.style.height = newHeight + 'px';
+    // 动画结束后清除固定高度
+    setTimeout(() => {
+      grid.style.height = '';
+      grid.style.transition = '';
+    }, 350);
+  });
 }
 
 function updateBoxDom() {
