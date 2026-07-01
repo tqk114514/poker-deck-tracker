@@ -48,13 +48,35 @@
     updateBoxDom();
   }
 
-  function measure(name, fn, iterations = 100) {
-    for (let i = 0; i < 3; i++) { try { fn(); } catch (e) {} }
+  // performance.now() 在非安全上下文精度被钳到 ~100μs。
+  // 自适应探测：从 1 次起 ×10 放大，直到总耗时 > 20ms（远超精度阈值），再反推单次耗时。
+  function probe(fn) {
+    let loops = 1;
+    let total = 0;
+    while (loops <= 100000000) {
+      const t0 = performance.now();
+      try { for (let j = 0; j < loops; j++) fn(); } catch (e) {}
+      total = performance.now() - t0;
+      if (total > 20) break;
+      loops *= 10;
+    }
+    return { perOp: total / loops, loops };
+  }
+
+  function measure(name, fn, iterations = 30) {
+    const { perOp, loops: probeLoops } = probe(fn);
+    // 每次迭代跑 innerLoops 次，让总耗时 ~20ms 越过精度阈值
+    let innerLoops = Math.max(1, Math.ceil(20 / Math.max(perOp, 0.0001)));
+    innerLoops = Math.min(innerLoops, 100000000);
+    // 预热
+    for (let i = 0; i < 2; i++) {
+      try { for (let j = 0; j < innerLoops; j++) fn(); } catch (e) {}
+    }
     const times = [];
     for (let i = 0; i < iterations; i++) {
       const t0 = performance.now();
-      fn();
-      times.push(performance.now() - t0);
+      for (let j = 0; j < innerLoops; j++) fn();
+      times.push((performance.now() - t0) / innerLoops);
     }
     times.sort((a, b) => a - b);
     const mid = Math.floor(times.length / 2);
@@ -65,19 +87,20 @@
       min: times[0],
       p95: times[Math.floor(times.length * 0.95)],
       max: times[times.length - 1],
-      iterations
+      iterations,
+      innerLoops
     });
     return times[mid];
   }
 
   // ====== 1. 标定 ======
   function benchCalibrate() {
-    measure('calibrateGrid 完整标定', calibrateGrid, 200);
+    measure('calibrateGrid 完整标定', calibrateGrid);
     measure('getComputedStyle+getBoundingClientRect', () => {
       const cs = getComputedStyle(grid);
       const r = grid.getBoundingClientRect();
       void cs.columnGap; void r.width; void r.height;
-    }, 200);
+    });
     measure('offsetTop 数列数', () => {
       const cs = grid.children;
       const top0 = cs[0].offsetTop;
@@ -87,7 +110,7 @@
         cols++;
       }
       void cols;
-    }, 200);
+    });
   }
 
   // ====== 2. 算术位移计算 ======
@@ -103,7 +126,7 @@
       const dx = (5 % cols - 4 % cols) * stepX;
       const dy = (Math.floor(5 / cols) - Math.floor(4 / cols)) * stepY;
       void dx; void dy;
-    }, 100000);
+    });
 
     measure(`全量位移计算 (${n}张)`, () => {
       for (let i = 0; i < n; i++) {
@@ -113,53 +136,53 @@
         const dy = (Math.floor(oldIdx / cols) - Math.floor(newIdx / cols)) * stepY;
         void dx; void dy;
       }
-    }, 1000);
+    });
   }
 
   // ====== 3. IO ======
   // 注意：saveStates 会写真实键 pokerDeck.heldCards，值与当前 cardStates 一致（测试不改 cardStates），
   // 数据不丢失，但 updateLastSaved 时间戳会被刷新。靠外层 snapshot/restore 兜底恢复。
   function benchIO() {
-    measure('saveStates (写 localStorage + 更新时间戳)', saveStates, 100);
-    measure('loadStates (读 + JSON.parse + new Set)', loadStates, 100);
+    measure('saveStates (写 localStorage + 更新时间戳)', saveStates);
+    measure('loadStates (读 + JSON.parse + new Set)', loadStates);
 
     const arr = Array.from(cardStates);
     const json = JSON.stringify(arr);
     measure('JSON.stringify(Array.from(Set))', () => {
       JSON.stringify(Array.from(cardStates));
-    }, 500);
+    });
     measure('JSON.parse + new Set', () => {
       new Set(JSON.parse(json));
-    }, 500);
+    });
     measure('localStorage.setItem', () => {
       localStorage.setItem('bench.tmp', json);
-    }, 200);
+    });
     measure('localStorage.getItem', () => {
       localStorage.getItem('bench.tmp');
-    }, 200);
+    });
   }
 
   // ====== 4. DOM ======
   function benchDOM() {
-    measure('renderGrid (innerHTML 赋值，无强制布局)', renderGrid, 30);
+    measure('renderGrid (innerHTML 赋值，无强制布局)', renderGrid);
     measure('renderGrid + 强制布局', () => {
       renderGrid();
       void grid.offsetHeight;
-    }, 30);
-    measure('updateStats (遍历54张 + DOM写)', updateStats, 200);
+    });
+    measure('updateStats (遍历54张 + DOM写)', updateStats);
     measure('grid.querySelectorAll(".card")', () => {
       grid.querySelectorAll('.card');
-    }, 500);
+    });
     measure('grid.children 遍历 + offsetTop', () => {
       const cs = grid.children;
       for (let i = 0; i < cs.length; i++) void cs[i].offsetTop;
-    }, 200);
+    });
     measure('deckById.get (Map 查找)', () => {
       deckById.get('S-A');
-    }, 100000);
+    });
     measure('DECK.find (数组遍历查找)', () => {
       DECK.find(c => c.id === 'S-A');
-    }, 10000);
+    });
   }
 
   // ====== 5. FLIP 重排计算（cleanLeaving 算术部分）======
@@ -184,7 +207,7 @@
         const dy = (Math.floor(oldIdx / cols) - Math.floor(i / cols)) * stepY;
         void dx; void dy;
       }
-    }, 500);
+    });
   }
 
   // ====== 6. 动画帧率（实际触发重排）======
@@ -246,6 +269,20 @@
   }
 
   // ====== 输出 ======
+  function fmtUs(ms) {
+    const us = ms * 1000;
+    if (us < 0.01) return us.toFixed(4);
+    if (us < 1) return us.toFixed(3);
+    if (us < 100) return us.toFixed(2);
+    return us.toFixed(0);
+  }
+
+  function fmtLoops(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+    return String(n);
+  }
+
   function printTable() {
     const sync = results.filter(r => !r.isFPS);
     const fps = results.filter(r => r.isFPS);
@@ -253,12 +290,13 @@
       console.groupCollapsed('%c⚡ 同步测试结果', 'color:#d4af37;font-weight:bold');
       console.table(sync.map(r => ({
         测试: r.name,
-        '中位(μs)': (r.median * 1000).toFixed(2),
-        '平均(μs)': (r.avg * 1000).toFixed(2),
-        '最小(μs)': (r.min * 1000).toFixed(2),
-        'P95(μs)': (r.p95 * 1000).toFixed(2),
-        '最大(μs)': (r.max * 1000).toFixed(2),
-        迭代: r.iterations
+        '中位(μs)': fmtUs(r.median),
+        '平均(μs)': fmtUs(r.avg),
+        '最小(μs)': fmtUs(r.min),
+        'P95(μs)': fmtUs(r.p95),
+        '最大(μs)': fmtUs(r.max),
+        '放大': fmtLoops(r.innerLoops),
+        '采样': r.iterations
       })));
       console.groupEnd();
     }
